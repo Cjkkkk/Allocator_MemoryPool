@@ -18,7 +18,7 @@ public:
     MemoryPool(size_t num,size_t size);
     ~MemoryPool();
     void* allocate(size_t size);
-    bool deallocate(void* ptr,size_t size);
+    MemoryPool* deallocate(MemoryPool* cursor,MemoryPool* end,void* ptr,size_t size);
 
 
     block_ptr free_Header = nullptr;
@@ -34,12 +34,12 @@ public:
 
 class MemoryPool_List{
 public:
-    int time = 0;
     MemoryPool* free_pool = nullptr;
-    MemoryPool* occupied_pool = nullptr;
+    MemoryPool* first_pool = nullptr;
     MemoryPool_List(){
         MemoryPool* p = new MemoryPool();
         free_pool = p;
+        first_pool = p;
     };
     void* allocate(size_t size){
         if(free_pool->free_Header == nullptr){
@@ -51,58 +51,39 @@ public:
             }
             //下一个内存池已经分配好了
             //移除空闲内存池链表头
-            MemoryPool* curr = free_pool;
             free_pool = free_pool->Next;
-            free_pool-> Prev = nullptr;
-
-            //添加占用内存池链表
-            curr->Next = occupied_pool;
-            if(occupied_pool != nullptr){
-                occupied_pool->Prev = curr;
-            }
-            occupied_pool = curr;
         }
         return free_pool->allocate(size);
     };
-    void deallocate(void* ptr,size_t size){
-        MemoryPool* c = occupied_pool;//从已经满的块中查找
-        while(c != nullptr){
-            void* Pool_Header = c->Pool_Header;
-            // 指针在内存池中
-            if (Pool_Header < ptr && ptr < (void *)((char *)Pool_Header + c->pool_size)) {
-                block_ptr curr = reinterpret_cast<block_ptr>(static_cast<char *>(ptr) - sizeof(block));
-                //从占用块链表中删除
-                c->alloc_Header = curr->next;
-                if (c->alloc_Header != nullptr) {
-                    c->alloc_Header->prev = nullptr;
+    void deallocate(void* ptr,size_t size) {
+        MemoryPool *cursor = first_pool->deallocate(first_pool, free_pool, ptr, size);//从第一个pool中开始查找
+        if( cursor == nullptr){
+            //不在内存池中
+            //std::cout<<"directly delete from os of size "<< size <<std::endl;
+            operator delete(ptr);
+            return;
+        }
+        else if(cursor->alloc_Header == nullptr) {
+            //std::cout << "find and delete size : " << size << " in id " << cursor->id << std::endl;
+            if (cursor != free_pool) {
+                if (cursor != first_pool) {
+                    cursor->Prev->Next = cursor->Next;
+                    cursor->Next->Prev = cursor->Prev;
+                } else {
+                    first_pool = first_pool->Next;
+                    first_pool->Prev = nullptr;
                 }
+                cursor->Next = free_pool->Next;
+                if (free_pool->Next != nullptr) free_pool->Next->Prev = cursor;
+                cursor->Prev = free_pool;
+                free_pool->Next = cursor;
 
-                // 加到空块链表中
-                curr->next = c->free_Header;
-                if (c->free_Header != nullptr) {
-                    c->free_Header->prev = curr;
-                }
-                c->free_Header = curr;
-
-                std::cout<<"find and delete in id "<<c->id <<std::endl;
-                if(c->alloc_Header == nullptr){
-                    
-                }
-                return;
-            } else if(c->Next != nullptr){
-                //还有下一块,查找下一块
-                c = c->Next;
-            } else{
-                break;
             }
         }
-        if(free_pool->deallocate(ptr,size))return;
-        //不在内存池中
-        std::cout<<"directly delete from os of size "<< size <<std::endl;
-        time ++;
-        operator delete(ptr);
-        return;
-    };
+        else{
+            //std::cout << "find and delete size : " << size << " in id " << cursor->id << std::endl;
+        }
+    }
 };
 
 #endif //FINAL_MEMORYPOOL_H

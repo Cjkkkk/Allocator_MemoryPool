@@ -1,11 +1,12 @@
 #include "MemoryPool.h"
-
 #include <iostream>
-
+#define k 1024
+#define default_block_num 64
+#define default_block_size 4 * k
 MemoryPool::MemoryPool(size_t bn, size_t bs){
-    if(bn < 64) block_num = 64;
+    if(bn < default_block_num) block_num = default_block_num;
     else block_num = bn;
-    if(bs < 4096 )block_size = 4096;
+    if(bs < default_block_size )block_size = default_block_size;
     else block_size = bs;
     pool_size = block_num * (block_size + sizeof(block));
     Pool_Header = operator new(pool_size);
@@ -26,31 +27,18 @@ MemoryPool::MemoryPool(size_t bn, size_t bs){
     }
 }
 
-MemoryPool::MemoryPool():MemoryPool(64, 4096) {
+MemoryPool::MemoryPool():MemoryPool(default_block_num, default_block_size) {
 }
 
 void* MemoryPool::allocate(size_t sz) {
     // 大于block_size，直接从os分配
     if( sz > block_size){
-        std::cout<<"allocat memory of size "<<sz<<" directly from os "<<std::endl;
+        //std::cout<<"allocat memory of size "<<sz<<" directly from os "<<std::endl;
         return ::operator new(sz);
     }
-//    else if (free_Header == nullptr ||Pool_Header == nullptr){
-//        std::cout<<"allocat memory of size "<<sz<<" in id "<<this->id<<std::endl;
-//        if(Next == nullptr){
-//            //没有下一块
-//            //分配下一块
-//            Next = new MemoryPool();
-//            Next->id = this->id + 1;
-//            return Next->allocate(sz);
-//        } else{
-//            //有下一块
-//            return Next->allocate(sz);
-//        }
-//    }
     else{
         //当前内存池还可以放入
-        std::cout<<"allocat memory of size "<<sz<<" in id "<<this->id<<std::endl;
+        //std::cout<<"allocat memory of size "<<sz<<" in id "<<this->id<<std::endl;
         block_ptr curr = free_Header;
 
         free_Header = curr->next;
@@ -68,48 +56,38 @@ void* MemoryPool::allocate(size_t sz) {
     }
 }
 
-bool MemoryPool::deallocate(void *ptr, size_t sz) {
+MemoryPool* MemoryPool::deallocate(MemoryPool* cursor,MemoryPool* end,void* ptr,size_t sz) {
     // 指针在内存池中
-//    if (Pool_Header < ptr && ptr < (void *)((char *)Pool_Header + pool_size)) {
-//        block_ptr curr = reinterpret_cast<block_ptr>(static_cast<char *>(ptr) - sizeof(block));
-//        //从占用块链表中删除
-//        alloc_Header = curr->next;
-//        if (alloc_Header != nullptr) {
-//            alloc_Header->prev = nullptr;
-//        }
-//
-//        // 加到空块链表中
-//        curr->next = free_Header;
-//        if (free_Header != nullptr) {
-//            free_Header->prev = curr;
-//        }
-//        free_Header = curr;
-//
-//        //将这个pool添加到free_pool中去
-//    } else if(Next != nullptr){
-//          //还有下一块,查找下一块
-//        Next->deallocate(ptr,sz);
-//    }else operator delete(ptr);
-    if (Pool_Header < ptr && ptr < (void *)((char *)Pool_Header + pool_size)) {
-        block_ptr curr = reinterpret_cast<block_ptr>(static_cast<char *>(ptr) - sizeof(block));
-        //从占用块链表中删除
-        alloc_Header = curr->next;
-        if (alloc_Header != nullptr) {
-            alloc_Header->prev = nullptr;
+    if (cursor != nullptr) {
+        void *Pool_Header = cursor->Pool_Header;
+        // 指针在内存池中
+        if (Pool_Header < ptr && ptr < (void *) ((char *) Pool_Header + cursor->pool_size)) {
+            block_ptr curr = reinterpret_cast<block_ptr>(static_cast<char *>(ptr) - sizeof(block));
+            if (curr != cursor->alloc_Header) {
+                curr->prev->next = curr->next;
+                if (curr->next != nullptr)curr->next->prev = curr->prev;
+            } else {
+                cursor->alloc_Header = curr->next;
+                if (curr->next != nullptr)curr->next->prev = nullptr;
+            }
+            // 加到空块链表中
+            curr->next = cursor->free_Header;
+            if (cursor->free_Header != nullptr) {
+                cursor->free_Header->prev = curr;
+            }
+            cursor->free_Header = curr;
+            //已经移除指针,返回当前内存池的首地址
+            return cursor;
+        }else if( cursor != end && cursor->Next!= nullptr) {
+            //还有下一块,查找下一块
+            return deallocate(cursor->Next, end, ptr, sz);
+        }else{
+            //没有空的内存池了
+            return nullptr;
         }
-
-        // 加到空块链表中
-        curr->next = free_Header;
-        if (free_Header != nullptr) {
-            free_Header->prev = curr;
-        }
-        free_Header = curr;
-        return true;
     }
-   return false;
-
+    return nullptr;
 }
-
 MemoryPool::~MemoryPool() {
     if (Pool_Header != nullptr)
         ::operator delete(Pool_Header);

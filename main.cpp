@@ -4,13 +4,13 @@
 #include "./STL_allocator.h"
 
 int main() {
-    std::vector <int,Allocator<int>> a;
-    for(int i = 0 ; i < 500 ; i++){
+    std::vector <int,Allocator<int>> a(10000);
+    for(int i = 0 ; i < 5000 ; i++){
         a.push_back(i);
     }
-    std::list <int,Allocator<int>> b;
-    for(int i = 0 ; i < 500 ; i++){
-        b.push_back(i);
+    std::list <int,Allocator<char>> b(10000);
+    for(int i = 0 ; i < 5000 ; i++){
+        b.push_back('a');
     }
     //exit(EXIT_SUCCESS);
 }
