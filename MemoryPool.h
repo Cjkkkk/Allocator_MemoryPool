@@ -51,7 +51,9 @@ public:
             }
             //下一个内存池已经分配好了
             //移除空闲内存池链表头
+            MemoryPool* curr = free_pool;
             free_pool = free_pool->Next;
+            free_pool->Prev = curr;
         }
         return free_pool->allocate(size);
     };
