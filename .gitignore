@@ -1,0 +1,4 @@
+allocator-cpp/
+test.cpp
+cmake-build-debug/
+CMakeFiles/
